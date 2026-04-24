@@ -5,7 +5,7 @@ import io
 import os
 import threading
 import numpy as np
-from moviepy.editor import VideoFileClip
+from moviepy import VideoFileClip
 from imageio_ffmpeg import get_ffmpeg_exe
 import subprocess
 
@@ -17,21 +17,29 @@ class ShakalizerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Shakalizer (Шакализатор)")
-        self.root.geometry("480x560")
+        self.root.geometry("480x620") # Немного увеличил высоту для новой кнопки
         self.root.resizable(False, False)
 
         self.input_file = None
+        self.output_file = None # Переменная для пути сохранения
         self.original_fps = 30
 
         self._build_ui()
 
     def _build_ui(self):
         # --- UI Elements ---
-        self.btn_select = ttk.Button(self.root, text="Выбрать файл (Изображение или Видео)", command=self.select_file)
-        self.btn_select.pack(pady=10)
+        self.btn_select = ttk.Button(self.root, text="1. Выбрать исходный файл", command=self.select_file)
+        self.btn_select.pack(pady=(10, 0))
 
         self.lbl_file = ttk.Label(self.root, text="Файл не выбран", foreground="gray")
-        self.lbl_file.pack()
+        self.lbl_file.pack(pady=(0, 10))
+
+        # Кнопка сохранения
+        self.btn_save_as = ttk.Button(self.root, text="2. Куда сохранить результат?", command=self.select_output_path, state="disabled")
+        self.btn_save_as.pack(pady=(0, 0))
+
+        self.lbl_save = ttk.Label(self.root, text="Путь не выбран", foreground="gray")
+        self.lbl_save.pack(pady=(0, 10))
 
         # Settings Frame
         settings_frame = ttk.LabelFrame(self.root, text="Настройки деградации")
@@ -110,19 +118,53 @@ class ShakalizerApp:
                     self.original_fps = 60
             
             self.lbl_file.config(text=os.path.basename(filepath), foreground="black")
+            self.btn_save_as.config(state="normal")
+            
+            # Автоматически предлагаем путь для сохранения рядом с оригиналом
+            base, ext_orig = os.path.splitext(filepath)
+            # Для видео форсируем mp4, для фото оставляем как есть
+            default_ext = ".mp4" if ext in ['mp4', 'avi', 'mov', 'mkv'] else ext_orig
+            self.output_file = f"{base}_shakal{default_ext}"
+            self.lbl_save.config(text=os.path.basename(self.output_file), foreground="black")
             self.btn_start.config(state="normal")
 
-    def start_processing(self):
+    def select_output_path(self):
         if not self.input_file:
+            return
+
+        ext = self.input_file.split('.')[-1].lower()
+        if ext in ['mp4', 'avi', 'mov', 'mkv']:
+            filetypes = [("Video", "*.mp4")]
+            def_ext = ".mp4"
+        else:
+            filetypes = [("Image", f"*.{ext}")]
+            def_ext = f".{ext}"
+
+        initial_dir = os.path.dirname(self.input_file)
+        initial_name = os.path.basename(self.output_file)
+
+        path = filedialog.asksaveasfilename(
+            title="Сохранить как...",
+            initialdir=initial_dir,
+            initialfile=initial_name,
+            defaultextension=def_ext,
+            filetypes=filetypes
+        )
+
+        if path:
+            self.output_file = path
+            self.lbl_save.config(text=os.path.basename(path), foreground="black")
+
+    def start_processing(self):
+        if not self.input_file or not self.output_file:
+            messagebox.showwarning("Внимание", "Выбери файл и место сохранения!")
             return
             
         self.btn_start.config(state="disabled")
         self.lbl_status.config(text="В процессе обработки...", foreground="blue")
-        # Run processing in a separate thread to prevent UI freezing
         threading.Thread(target=self.process_file, daemon=True).start()
 
     def _shakalize_pil_image(self, img, quality, pixel_size):
-        """Applies degrading effects to a PIL Image object."""
         if img.mode != 'RGB':
             img = img.convert('RGB')
         
@@ -130,10 +172,8 @@ class ShakalizerApp:
         small_w = max(1, w // pixel_size)
         small_h = max(1, h // pixel_size)
         
-        # Pixelate
         img = img.resize((small_w, small_h), Image.Resampling.BOX)
         
-        # Degrade quality
         if quality > 0:
             enhancer = ImageEnhance.Contrast(img)
             img = enhancer.enhance(1.0 + (quality / 100.0))
@@ -156,20 +196,16 @@ class ShakalizerApp:
         p = self.pixel_var.get()
         target_fps = self.fps_var.get()
         ext = self.input_file.split('.')[-1].lower()
-        base_path = self.input_file.rsplit('.', 1)[0]
         
         try:
             if ext in['png', 'jpg', 'jpeg']:
-                output_file = f"{base_path}_shakal.{ext}"
                 img = Image.open(self.input_file)
-                self._shakalize_pil_image(img, q, p).save(output_file)
+                self._shakalize_pil_image(img, q, p).save(self.output_file)
             else:
-                # Force .mp4 output for videos to avoid codec/container issues
-                output_file = f"{base_path}_shakal.mp4"
                 if self.mode_var.get() == "accurate":
-                    self.process_video_accurate(self.input_file, output_file, q, p, target_fps)
+                    self.process_video_accurate(self.input_file, self.output_file, q, p, target_fps)
                 else:
-                    self.process_video_fast(self.input_file, output_file, q, p, target_fps)
+                    self.process_video_fast(self.input_file, self.output_file, q, p, target_fps)
 
             self.root.after(0, self.finish, "Готово! Результат сохранен", "green")
         except Exception as e:
@@ -184,8 +220,7 @@ class ShakalizerApp:
 
     def process_video_accurate(self, input_path, output_path, q, p, target_fps):
         clip = VideoFileClip(input_path)
-        # Process each frame via PIL
-        shakal_clip = clip.fl_image(lambda f: np.array(self._shakalize_pil_image(Image.fromarray(f), q, p)))
+        shakal_clip = clip.image_transform(lambda f: np.array(self._shakalize_pil_image(Image.fromarray(f), q, p)))
         
         temp_v = "temp_v.mp4"
         shakal_clip.write_videofile(temp_v, fps=target_fps, codec="libx264", audio=False, logger=None)
@@ -211,7 +246,6 @@ class ShakalizerApp:
             output_path
         ]
         
-        # Suppress ffmpeg output in console
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
     def _add_bad_audio(self, video_v, original_media, output_p, q):
