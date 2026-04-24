@@ -8,9 +8,8 @@
 git clone https://github.com/lepex1/shakal.git
 ```
 
-````
+```
 cd shakal
-
 ```
 
 ```
