@@ -17,11 +17,11 @@ class ShakalizerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Shakalizer (Шакализатор)")
-        self.root.geometry("480x620") # Немного увеличил высоту для новой кнопки
+        self.root.geometry("480x520") # Уменьшил высоту, так как убрали блок выбора режима
         self.root.resizable(False, False)
 
         self.input_file = None
-        self.output_file = None # Переменная для пути сохранения
+        self.output_file = None 
         self.original_fps = 30
 
         self._build_ui()
@@ -76,17 +76,9 @@ class ShakalizerApp:
         self.fps_entry = ttk.Entry(f_frame, textvariable=self.fps_var, width=4)
         self.fps_entry.pack(side="right", padx=5)
 
-        # Video Mode Frame
-        frame_mode = ttk.LabelFrame(self.root, text="Режим обработки видео")
-        frame_mode.pack(pady=10, padx=20, fill="x")
-
-        self.mode_var = tk.StringVar(value="fast")
-        ttk.Radiobutton(frame_mode, text="Быстрый (FFmpeg) - потоковое сжатие", variable=self.mode_var, value="fast").pack(anchor="w", padx=10)
-        ttk.Radiobutton(frame_mode, text="Точный (PIL) - покадровый JPEG-ад", variable=self.mode_var, value="accurate").pack(anchor="w", padx=10)
-
         # Start Button
         self.btn_start = ttk.Button(self.root, text="УШАТАТЬ В ХЛАМ", command=self.start_processing, state="disabled")
-        self.btn_start.pack(pady=10)
+        self.btn_start.pack(pady=20)
 
         self.lbl_status = ttk.Label(self.root, text="Готов", font=("Arial", 9, "bold"))
         self.lbl_status.pack()
@@ -104,7 +96,7 @@ class ShakalizerApp:
             self.input_file = filepath
             ext = filepath.split('.')[-1].lower()
             
-            if ext in['mp4', 'avi', 'mov', 'mkv']:
+            if ext in ['mp4', 'avi', 'mov', 'mkv']:
                 try:
                     clip = VideoFileClip(filepath)
                     self.original_fps = int(clip.fps)
@@ -120,9 +112,7 @@ class ShakalizerApp:
             self.lbl_file.config(text=os.path.basename(filepath), foreground="black")
             self.btn_save_as.config(state="normal")
             
-            # Автоматически предлагаем путь для сохранения рядом с оригиналом
             base, ext_orig = os.path.splitext(filepath)
-            # Для видео форсируем mp4, для фото оставляем как есть
             default_ext = ".mp4" if ext in ['mp4', 'avi', 'mov', 'mkv'] else ext_orig
             self.output_file = f"{base}_shakal{default_ext}"
             self.lbl_save.config(text=os.path.basename(self.output_file), foreground="black")
@@ -198,14 +188,12 @@ class ShakalizerApp:
         ext = self.input_file.split('.')[-1].lower()
         
         try:
-            if ext in['png', 'jpg', 'jpeg']:
+            if ext in ['png', 'jpg', 'jpeg']:
                 img = Image.open(self.input_file)
                 self._shakalize_pil_image(img, q, p).save(self.output_file)
             else:
-                if self.mode_var.get() == "accurate":
-                    self.process_video_accurate(self.input_file, self.output_file, q, p, target_fps)
-                else:
-                    self.process_video_fast(self.input_file, self.output_file, q, p, target_fps)
+                # Всегда используем точный режим
+                self.process_video_accurate(self.input_file, self.output_file, q, p, target_fps)
 
             self.root.after(0, self.finish, "Готово! Результат сохранен", "green")
         except Exception as e:
@@ -223,39 +211,24 @@ class ShakalizerApp:
         shakal_clip = clip.image_transform(lambda f: np.array(self._shakalize_pil_image(Image.fromarray(f), q, p)))
         
         temp_v = "temp_v.mp4"
+        # Сохраняем временное видео без звука
         shakal_clip.write_videofile(temp_v, fps=target_fps, codec="libx264", audio=False, logger=None)
         
+        # Накладываем плохой звук
         self._add_bad_audio(temp_v, input_path, output_path, q)
+        
         if os.path.exists(temp_v): 
             os.remove(temp_v)
         clip.close()
 
-    def process_video_fast(self, input_path, output_path, q, p, target_fps):
-        ffmpeg_exe = get_ffmpeg_exe()
-        v_bitrate = f"{max(2, 500 - q*5)}k"
-        
-        vf = f"fps={target_fps},scale=iw/{p}:-1,scale=iw*{p}:-1:flags=neighbor"
-        if q > 50:
-            vf += f",noise=alls={int(q/4)}:allf=t"
-
-        cmd =[
-            ffmpeg_exe, "-y", "-i", input_path,
-            "-vf", vf,
-            "-b:v", v_bitrate, "-maxrate", v_bitrate, "-bufsize", "50k",
-            "-c:a", "aac", "-ar", "8000", "-b:a", f"{max(8, 64-q)}k",
-            output_path
-        ]
-        
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-
     def _add_bad_audio(self, video_v, original_media, output_p, q):
         ffmpeg_exe = get_ffmpeg_exe()
-        rates =[44100, 22050, 11025, 8000]
+        rates = [44100, 22050, 11025, 8000]
         idx = min(len(rates)-1, int(q/30))
         ar = rates[idx]
         ab = f"{max(8, 128-q)}k"
 
-        cmd =[
+        cmd = [
             ffmpeg_exe, "-y", "-i", video_v, "-i", original_media,
             "-map", "0:v", "-map", "1:a?", "-c:v", "copy",
             "-c:a", "aac", "-ar", str(ar), "-b:a", ab, output_p
