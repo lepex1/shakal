@@ -16,7 +16,7 @@ class ShakalizerApp:
     """
     def __init__(self, root):
         self.root = root
-        self.root.title("Shakalizer (Шакализатор)")
+        self.root.title("Shakal")
         self.root.geometry("480x520") # Уменьшил высоту, так как убрали блок выбора режима
         self.root.resizable(False, False)
 
