@@ -116,19 +116,24 @@ class ShakalEngine {
       final bytes = await File(zipPath).readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);
 
-      var found = false;
+      var foundFfmpeg = false;
+      final localDir = p.dirname(localFfmpeg);
       for (final entry in archive) {
-        if (entry.isFile &&
-            p.basename(entry.name).toLowerCase() == 'ffmpeg.exe') {
+        if (!entry.isFile) continue;
+        final name = p.basename(entry.name).toLowerCase();
+        if (name == 'ffmpeg.exe') {
           final outFile = File(localFfmpeg);
           await outFile.create(recursive: true);
           await outFile.writeAsBytes(entry.content as List<int>);
-          found = true;
-          break;
+          foundFfmpeg = true;
+        } else if (name == 'ffprobe.exe') {
+          final outFile = File(p.join(localDir, 'ffprobe.exe'));
+          await outFile.create(recursive: true);
+          await outFile.writeAsBytes(entry.content as List<int>);
         }
       }
 
-      if (!found) {
+      if (!foundFfmpeg) {
         throw Exception('ffmpeg.exe не найден в скачанном архиве.');
       }
 
@@ -356,9 +361,44 @@ class ShakalEngine {
     }
   }
 
+  static String _getFfprobePath() {
+    final appData = Platform.environment['APPDATA'] ?? '';
+    final dir = p.join(appData, 'shakal');
+    return p.join(dir, Platform.isWindows ? 'ffprobe.exe' : 'ffprobe');
+  }
+
   static Future<bool> isFfmpegAvailable() async {
     final path = _getFfmpegPath();
     return File(path).exists();
+  }
+
+  static Future<int> getVideoFpsAsync(String inputPath) async {
+    final ffprobePath = _getFfprobePath();
+    try {
+      final result = await Process.run(ffprobePath, [
+        '-v', 'error',
+        '-select_streams', 'v:0',
+        '-show_entries', 'stream=r_frame_rate',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        inputPath,
+      ]);
+      if (result.exitCode != 0) return 30;
+      final rate = (result.stdout as String).trim();
+      if (rate.isEmpty) return 30;
+      final parts = rate.split('/');
+      if (parts.length == 2) {
+        final num = int.tryParse(parts[0]);
+        final den = int.tryParse(parts[1]);
+        if (num != null && den != null && den > 0) {
+          return (num / den).round().clamp(1, 120);
+        }
+      }
+      final parsed = int.tryParse(rate);
+      if (parsed != null) return parsed.clamp(1, 120);
+      return 30;
+    } catch (_) {
+      return 30;
+    }
   }
 
   static String _getFfmpegPath() {
