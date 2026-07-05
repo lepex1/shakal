@@ -27,6 +27,7 @@ class ShakalViewModel extends ChangeNotifier {
   String _pixelSizeText = '5';
   int _fpsValue = 24;
   String _fpsText = '24';
+  int? _originalFps;
 
   bool _isProcessing = false;
   bool _isFileLoaded = false;
@@ -51,6 +52,7 @@ class ShakalViewModel extends ChangeNotifier {
   String get pixelSizeText => _pixelSizeText;
   int get fpsValue => _fpsValue;
   String get fpsText => _fpsText;
+  int? get originalFps => _originalFps;
 
   bool get isProcessing => _isProcessing;
   bool get isFileLoaded => _isFileLoaded;
@@ -105,7 +107,8 @@ class ShakalViewModel extends ChangeNotifier {
   }
 
   set fpsValue(int value) {
-    final clamped = value.clamp(1, 60);
+    final maxFps = _originalFps ?? 60;
+    final clamped = value.clamp(1, maxFps);
     if (clamped == _fpsValue) return;
     _fpsValue = clamped;
     _fpsText = clamped.toString();
@@ -128,12 +131,23 @@ class ShakalViewModel extends ChangeNotifier {
     _isResultAvailable = false;
     _fileName = p.basename(path);
     _isVideo = ShakalEngine.isVideoFile(path);
+    _originalFps = null;
     _previewBytes = null;
 
     ShakalLogger().success('Загружен файл: $path');
 
     _statusSubtext = 'Файл загружен';
     notifyListeners();
+
+    if (_isVideo) {
+      final detected = await ShakalEngine.getVideoFpsAsync(path);
+      _originalFps = detected;
+      if (_fpsValue > detected) {
+        _fpsValue = detected;
+        _fpsText = detected.toString();
+      }
+      ShakalLogger().debug('Определён FPS видео: $detected');
+    }
 
     final ext = _isVideo ? p.extension(path) : '.jpg';
     _outputPath = p.join(
