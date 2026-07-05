@@ -28,13 +28,13 @@
 
 ## Установка и запуск
 
-### Вариант 1 — готовый билд
+### Вариант 1
 
 1. Перейдите в раздел **[Releases](https://github.com/lepex1/shakal/releases)**.
 2. Скачайте архив `shakal-win-x64.zip`.
 3. Распакуйте в любое место и запустите `shakal.exe`.
 
-### Вариант 2 — сборка из исходников
+### Вариант 2
 
 ```bash
 git clone https://github.com/lepex1/shakal.git
@@ -44,7 +44,7 @@ flutter build windows --debug
 ./build/windows/x64/runner/Debug/shakal.exe
 ```
 
-### Вариант 3 — запуск через flutter run
+### Вариант 3
 
 ```bash
 git clone https://github.com/lepex1/shakal.git
