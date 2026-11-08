@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Release archives and local demo material
+*.zip
+/tmp/
+/1LOQWIDFBTQ_jpg.png
