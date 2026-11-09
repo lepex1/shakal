@@ -44,7 +44,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/before-after.en.png" alt="Before and after: quality 62 %, pixel size 5 px" width="880">
+  <img src="assets/before-after.en.png" alt="Before and after: quality 71 %, pixel size 9 px" width="880">
 </p>
 
 ---

@@ -47,4 +47,5 @@ app.*.map.json
 # Release archives and local demo material
 *.zip
 /tmp/
+/assets-dart/
 /1LOQWIDFBTQ_jpg.png

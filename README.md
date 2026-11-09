@@ -44,7 +44,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/before-after.png" alt="До и после: сжатие 62 %, размер пикселя 5 px" width="880">
+  <img src="assets/before-after.png" alt="До и после: сжатие 71 %, размер пикселя 9 px" width="880">
 </p>
 
 ---
